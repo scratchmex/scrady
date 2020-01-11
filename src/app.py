@@ -6,7 +6,7 @@ from functools import partial
 
 
 if __name__ == "__main__":
-    date = time.strftime('%d-%m-%Y-%H:%M:%S')
+    date = time.strftime('%d-%m-%Y-%H_%M_%S')
     logging.basicConfig(filename='logs/{}.log'.format(date), level=logging.DEBUG)
     logInst = logging.getLogger()
     logInst.addHandler(logging.StreamHandler())
