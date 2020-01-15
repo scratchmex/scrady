@@ -7,7 +7,6 @@
 import pymongo
 from scrapy.exceptions import DropItem
 from scrady.items import BaseAd, PropertyAd
-from warnings import warn
 
 
 class ScradyPipeline(object):
@@ -17,68 +16,30 @@ class ScradyPipeline(object):
 class ValidateItemPipeline():
     '''Pipeline used for validating items from items.py.
 
-    Steps to add a class to validate:
-    - Add the class name if statement in process_item function
-    - Implement a validate_classname function as classmethod. 
-    This function should raise a DropItem exception if item not valid
+    This calls is_valid method from item. See items implementation for details.
     '''
     def process_item(self, item, spider):
-        if isinstance(item, BaseAd):
-            self.validate_BaseAd(item)
-        if isinstance(item, PropertyAd):
-            self.validate_PropertyAd(item)
-            
-    @staticmethod
-    def validateVariables(obj, objname, objid, vars):
-        '''Function to validate if a variable is set on a class. 
-        
-        If the variable not in object scrapy.DropItem is called.
-        See implementations for details.
-        '''
-        for var in vars:
-            if var not in obj:
-                DropItem(f'{objname}[{var}] missing in {objid}. Dropping item.')
-        
-    @classmethod
-    def validate_BaseAd(cls, item):
-        nonlocal item
-        itemClassname=item.__class__.__name__
-        if not item.get('type'):
-            DropItem(f'type of ad missing in {itemClassname}')
-        if not item.get('url'):
-            DropItem(f'URL not saved in {itemClassname}')
-        if not item.get('id'):
-            warn(f'{itemClassname} not generating id hash. Setting it myself', RuntimeWarning)
-            item['id']=hash(item['id'])
-
-    @classmethod
-    def validate_PropertyAd(cls, item):
-        requiredFields=[
-            'type',
-            'category',
-            'estate_type',
-            'title',
-            'price',
-            'description'
-        ]
-
-        cls.validateVariables(item, 'item', item['url'], requiredFields)
-        cls.validateVariables(item['price'], 'price', item['url'], ('amount','currency'))
-        cls.validateVariables(item['geocoordinates'], 'geocoordinates', item['url'], ('latitude','longitude'))
-
+        try:
+            item.is_valid()
+        except DropItem:
+            raise
+        else:
+            return item
 
 class MongoPipeline():
     '''Base MongoDB pipeline class to manage connections.
+    MONGO_URI,MONGO_DATABASE are set on settings.py via .env file. See settings.py
 
     Variables:
-        MONGO_URI,MONGO_DATABASE: are set on settings.py via .env file. See settings.py
-        collection_name: by default the spider.name
+        MONGO_URI: by default 'localhost'
+        MONGO_DATABASE: by default 'scrapy_items'
+        collection_name: by default spider.name
     '''
-    collection_name = 'scrapy_items'
 
     def __init__(self, mongo_uri, mongo_db, collection_name):
         self.mongo_uri = mongo_uri
         self.mongo_db = mongo_db
+        self.collection_name = collection_name
 
     @classmethod
     def from_crawler(cls, crawler):
@@ -101,13 +62,21 @@ class MongoPipeline():
 
 class DuplicatesPipeline(MongoPipeline):
     def process_item(self, item, spider):
-        itemCount=self.db[self.collection_name].find_one({'id':item['id']}).count()
-        if itemCount!=0:
+        try:
+            dbitem=self.db[self.collection_name].find({'id':item['id']})
+        except:
+            spider.logger.exception('Error querying item in db')
+            return item
+
+        if dbitem:
             DropItem(f'Item with url={item["url"]} already saved in MongoDB')
+        if dbitem.count()>=2:
+            spider.logger.warning(f'MongoDB has duplicated item in {self.mongo_db}.{self.collection_name} with id<{item["id"]}>')
 
         return item
 
 class SaveItem(MongoPipeline):
     def process_item(self, item, spider):
         self.db[self.collection_name].insert_one(dict(item))
+
         return item

@@ -6,6 +6,9 @@
 # https://docs.scrapy.org/en/latest/topics/items.html
 
 from scrapy import Item, Field
+from scrapy.exceptions import DropItem
+from warnings import warn
+from hashlib import sha1
 
 
 class ScradyItem(Item):
@@ -18,27 +21,64 @@ class BaseAd(Item):
     
     Fields:
         url:the url parsed from
-        id:hashed by url
+        id:sha1 hash of url
         type:estate,vehicles,media,fashion,services,employment 
+    
+    The subclasses must override is_valid method while calling it from super. See the is_valid method for details.
+    Example:
+        def is_valid(self):
+            super().validate()
+            # Your validations here
     '''
+    # Set fields and required here
     url=Field()
     id=Field()
     type=Field()
 
+    required_fields=[
+        'url',
+        'id',
+        'type'
+    ]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if not self.type:
-            raise NotImplementedError('type of ad must be set')
+        if not self['type']:
+            raise NotImplementedError('type of ad must be set as static class variable')
         #use url hash as id to avoid duplicates
-        self.id=hash(self.url)
+        self['id']=sha1(self.get('url').encode()).hexdigest()
+
+    def validate_variables(self, obj, objname, required_vars):
+        '''Function to validate if a variable is set on a class. 
+        
+        If the variable not in object scrapy.DropItem is raised.
+        See implementations for details.
+
+        Example:
+            validate_variables(self, self.__class__.__name__, required_fields)
+            validate_variables(price, 'price', ('amount', 'currency'))
+        '''
+        for var in required_vars:
+            if not obj.get(var):
+                DropItem(f'<{objname}> is missing <{var}>. URL: <{self.get("url", "empty")}>')
+
+    def is_valid(self):
+        # Please call super validate function in subclasses
+        # super().validate()
+        my_name=self.__class__.__name__ # get the actual classname of children
+        if not self.get('id'):
+            warn(f'<{my_name}> missing id. Setting it myself', RuntimeWarning)
+            self['id']=sha1(self['url'].encode()).hexdigest()
+
+        self.validate_variables(self, my_name, self.required_fields)
 
 class PropertyAd(BaseAd):
     '''Property class for ads about real estate.
 
     Fields:
         type:estate. Real estate type of ad. Do not change!.
-        category:rent,vacational_rent,buy
-        estate_type:house,department,terrain,building
+        category:rent,vacational_rent,sell
+        estate_type:house,department,land,building
         title:str
         price:
             amount:float
@@ -51,7 +91,7 @@ class PropertyAd(BaseAd):
         seller:
             name:str
             url:full url to profile
-            type:agency,partiular
+            type:agency,particular
         attributes:
             numberBathrooms:int
             numberBedrooms:int
@@ -68,17 +108,17 @@ class PropertyAd(BaseAd):
         'amount': Field(),
         'currency': Field()
     })
-    geocoordinates={
+    geocoordinates=Field({
         'latitude': Field(),
         'longitude': Field()
-    }
+    })
     description=Field()
     phone=Field()
-    seller={
+    seller=Field({
         'name': Field(),
         'url': Field(),
         'type': Field,
-    }
+    })
     attributes=Field({
         'numberBathrooms': Field(),
         'numberBedrooms': Field(),
@@ -87,4 +127,25 @@ class PropertyAd(BaseAd):
         'numberFloors': Field(),
     })
 
+    required_fields=[
+            'type',
+            'category',
+            'estate_type',
+            'title',
+            'price',
+            'description'
+        ]
     
+    def is_valid(self):
+        super().is_valid()
+        my_name=self.__class__.__name__
+        
+        self.validate_variables(self, my_name, self.required_fields)
+        self.validate_variables(self['price'], 'price', (
+            'amount',
+            'currency'
+        ))
+        self.validate_variables(self['geocoordinates'], 'geocoordinates', (
+            'latitude',
+            'longitude'
+        ))

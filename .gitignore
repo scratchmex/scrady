@@ -1,5 +1,9 @@
-#Logs
-logs/*
+#VSCode
+.vscode
+
+#scrapinghub
+scrapinghub.yml
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

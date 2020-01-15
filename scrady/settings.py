@@ -8,12 +8,25 @@
 #     https://docs.scrapy.org/en/latest/topics/settings.html
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
+from warnings import warn
+from dotenv import load_dotenv
+try:
+   load_dotenv()
+except:
+   warn('Could not load_dotenv', RuntimeWarning)
+
+from os import getenv
+
 
 BOT_NAME = 'scrady'
 
 SPIDER_MODULES = ['scrady.spiders']
 NEWSPIDER_MODULE = 'scrady.spiders'
 
+#Database settings
+#Add a .env file in the root folder setting the following constants
+MONGO_URI=getenv('MONGO_URI', 'localhost')
+MONGO_DATABASE=getenv('MONGO_DATABASE', 'scrapy_items')
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 #USER_AGENT = 'scrady (+http://www.yourdomain.com)'
@@ -33,7 +46,7 @@ ROBOTSTXT_OBEY = True
 #CONCURRENT_REQUESTS_PER_IP = 16
 
 # Disable cookies (enabled by default)
-#COOKIES_ENABLED = False
+COOKIES_ENABLED = False
 
 # Disable Telnet Console (enabled by default)
 #TELNETCONSOLE_ENABLED = False
@@ -52,9 +65,12 @@ ROBOTSTXT_OBEY = True
 
 # Enable or disable downloader middlewares
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-#DOWNLOADER_MIDDLEWARES = {
-#    'scrady.middlewares.ScradyDownloaderMiddleware': 543,
-#}
+DOWNLOADER_MIDDLEWARES = {
+   # 'scrady.middlewares.ScradyDownloaderMiddleware': 543,
+   'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None,
+   'scrapy_user_agents.middlewares.RandomUserAgentMiddleware': 400,
+}
+RANDOM_UA_TYPE = 'desktop.random'
 
 # Enable or disable extensions
 # See https://docs.scrapy.org/en/latest/topics/extensions.html
@@ -64,9 +80,11 @@ ROBOTSTXT_OBEY = True
 
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-#ITEM_PIPELINES = {
-#    'scrady.pipelines.ScradyPipeline': 300,
-#}
+ITEM_PIPELINES = {
+   'scrady.pipelines.ValidateItemPipeline': 100,
+   'scrady.pipelines.DuplicatesPipeline': 200,
+   'scrady.pipelines.SaveItem': 500
+}
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html
