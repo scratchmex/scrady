@@ -82,8 +82,11 @@ class VivanunciosSpider(scrapy.Spider):
         if response.css('body.Error404').get():
             self.logger.error(f'Getting 404. URL: <{response.url}>')
             return
+        adId=response.css('input[name="adId"]::attr(value)').get()
+        if not adId:
+            self.logger.error(f'No adId?. URL: <{response.url}>')
+            return
         try:
-            adId=response.css('input[name="adId"]::attr(value)').get()
             possibles_adInfo=response.css('script::text').re(self.adInfo_pattern, replace_entities=False)
             adInfo=next(filter(lambda i: str(adId) in i, possibles_adInfo))
             adInfo=json.loads(adInfo)[3]['s']
